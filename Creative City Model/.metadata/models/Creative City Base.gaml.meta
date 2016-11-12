@@ -1,5 +1,5 @@
 #
-#Tue Oct 25 02:04:48 EDT 2016
+#Sat Nov 12 13:28:15 EST 2016
 operators=envelope~-~as~count~.~sum~collect~\=~length~>\=~*
 plugins=msi.gama.core
 statements=action~write~init~do~set

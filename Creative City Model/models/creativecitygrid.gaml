@@ -8,11 +8,13 @@
 model creativecitygrid
 
 global {
+	//initalization of list of residential spaces for migration of people
+	list<patches> residentialspaces <- [] ;
   float mean_pop_count; 
   float high_dense_level;
   float n_number;
-  float percent_educated;//% of population with college education;
-  float percent_educated_cr;//% of creative population with college education
+  float percent_educated<-50.0;//% of population with college education;
+  float percent_educated_cr<-50.0;//% of creative population with college education
   float indexofgini;
   float percent_poor;
   float percent_middle;
@@ -21,39 +23,41 @@ global {
   float mean_income_all;
   float median_income_all;
   float mean_income_cr;
-  float pop_growth_rate<-30;
-  int pop -> {length(person)};
+  float pop_growth_rate<-30.0;
+  int init_pop <- 100;
   int dimensions <- 25;
   string landuse;
-  
-  /*reflex buildagent{
-  //allows for turtles to be created as a result of population growth rate by year
-  //if pop_growth_rate is greater than zero
-  	if(pop_growth_rate>0){
-      create species:person number:((pop_growth_rate/12)*pop){
-      	if(flip(0.5)){
-      		educated <- true;	
-      	}
-      }  
-   	}
-    }*/
+  //import land use values from csv file
   file my_csv_file <- csv_file("../includes/kendallsquarelayout11-4-16.csv",",");
   init {
     matrix data <- matrix(my_csv_file);
     ask patches{
-      landuse <- (data[grid_x,grid_y]);
-      write data[grid_x,grid_y];    
+      landuse <- (string(data[grid_x,grid_y])); 
     }
+    //Update color depending on landuse
+    //also add patches with residential landuse to "residentialspaces" list
+    //ERROR HERE: for some reason, this command populates the list "residential spaces with the type nil.
+    //This can be seen by debugging command "write residentialspaces"
     ask patches{
       do update_color;
+      if (landuse = "residential"){
+      	add patches(patches) to: residentialspaces;
+      }
+      write residentialspaces;
     }
-    create person number:100{
-      	if(flip(0.5)){
+    create person number:init_pop{
+      	if(flip(percent_educated/100)){
       		educated <- true;	
       	}
-      }  
+      	if(flip((percent_educated/100)*(percent_educated_cr/100))){
+      		creative <- true;	
+      	}
+      }
+
   }
 }
+
+
 
 species person skills: [moving]{
 	bool content_w_neighbor;//indicates whether or not the turtle is content with the tolerance of his neighbors
@@ -74,18 +78,33 @@ species person skills: [moving]{
 	bool partnered;//If true, the person is paired with an investment or creative inspiration partner.
     bool partner_timeshare;//How long the person prefers to partner with investor/creative inspiration.
 	bool is_happy -> {tolerance >= (similar_total / total_nearby)} ;
+	patches my_place;
+	init {
+        //The agent will be located on one of the free places
+        my_place <- one_of(residentialspaces);
+		write my_place;        
+        location <- my_place.location; 
+    } 
 	reflex monthly_actions{
 		//kill off agents if pop_growth_rate is less than zero
-		 if(pop_growth_rate>0){
+		 if(pop_growth_rate<0){
 			if (flip(pop_growth_rate/12/100)) {
                 do die;
         //checks to every month to see if the agent has been assigned a creative boolean value yet, agents that have been
             }
-        }
+        }   
 }
+	//set people as blue circles
+    aspect default {
+        draw circle(0.5) color:#blue;
+    }
+    //migrate from current location to random other residential location
+    action migrate{
+		self.location <- one_of(residentialspaces).location;
+	}
 }
 
-grid patches width: dimensions height: dimensions neighbors: 8  {
+grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents: false frequency: 0{
 
     rgb color;//color of grid patch
     int neighborhood;//neighborhood which grid patch belongs
@@ -109,6 +128,7 @@ grid patches width: dimensions height: dimensions neighbors: 8  {
        }
     
     }
+    //sets color based on landuse value
     action update_color {
         if (landuse = "water") {
             color <- #blue;
