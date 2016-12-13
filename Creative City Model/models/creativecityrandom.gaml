@@ -5,11 +5,13 @@
 * Tags: Tag1, Tag2, TagN
 */
 
-model creativecitygrid
+model creativecityrandom
 
 global {
 	//initalization of list of residential spaces for migration of people
 	list<patches> residentialspaces <- [];
+	list<patches> creative_spaces <- [];
+	list<patches> high_creative_spaces <- [];
 	//initialization of list of people in city
 	list<person> all_people;
 	//initialization of list of creative people in city
@@ -53,23 +55,27 @@ global {
   int dimensions <- 25  parameter: "Grid Dimensions" category: "Resident Specifications";
   //average tolerance of members of city, (for now, average tolerance = tolerance of all members of city)
   int mean_tolerance <-60 parameter: "Mean Tolerance" category: "Resident Specifications";
+  int rate_of_partnership <-60 parameter: "Rate of Partnership" category:"Resident Specifications";
   //distance of neighbors factored into tolerance for others
   int neighbours_distance <- 1 parameter: "Distance of perception:" category: "Resident Specifications";
   float neighborhood_size <- 0.0 parameter: "Neighborhood Size: " category: "Resident Specifications";
-  int population;
+  
+  int percent_water <- 20 parameter: "Landuse Percentage Water" category: "City Specifications";
+  int percent_green_space <- 20 parameter: "Landuse Percentage Green Space" category: "City Specifications";
+  int percent_commercial <- 20 parameter: "Landuse Percentage Commercial" category: "City Specifications";
+  int percent_residential <- 20 parameter: "Landuse Percentage Residential" category: "City Specifications";
+  int percent_undeveloped <- 20 parameter: "Landuse Percentage Undeveloped" category: "City Specifications";
   string landuse;
   string income_dist;
+  
   //import land use values from csv file
-  file my_csv_file <- csv_file("../includes/kendallsquarelayout11-4-16.csv",",");
+ 
   init {
-    matrix data <- matrix(my_csv_file);
-    ask patches{
-      landuse <- (string(data[grid_x,grid_y])); 
-    }
+    
     //ask patches  to compile a collection of residentials
     ask patches{
       do update_color;
-      if (landuse = "residential"){
+      if (color_value = 3){
       	add patches(self) to: residentialspaces;
       }
     }
@@ -111,7 +117,17 @@ global {
       	color <- colors at (rnd(number_of_groups-1));
       }
     }
- 
+ reflex countcreative{
+ 	ask patches{
+ 	if(creative_space){
+ 		add patches(self) to: creative_spaces;
+ 		}
+ 	if(high_creative_space){
+ 		add patches(self) to: high_creative_spaces;
+ 		} 	
+ 	}
+ }
+
   //other calculated variables
   float mean_income_all<- 0.0 update: sum(all_people collect each.income)/length(all_people);
   float median_income_all<-0.0 update: median(all_people collect each.income);
@@ -119,6 +135,11 @@ global {
   float percent_middle <- 0.0 update: all_people count (each.income > median_income_all*0.75)/length(all_people);
   float percent_rich <- 0.0 update:  all_people count (each.income > median_income_all*4)/length(all_people);
   float mean_income_cr <- 0.0 update: sum(cr_people collect each.income)/length(cr_people);
+  int cr_population<- length(cr_people) update: length(cr_people);
+  int population <- length(all_people) update: length(all_people);
+  int num_creative_spaces <- length(creative_spaces)update: length(creative_spaces);
+  int num_high_creative_spaces <- length(high_creative_spaces)update: length(high_creative_spaces);
+  int num_patches <- dimensions*dimensions;
 }
 
 
@@ -153,6 +174,7 @@ species person skills: [moving]{
 	
 	bool educated <- nil;// whether or not agent has a university degree
 	bool partnered<-false;//If true, the person is paired with an investment or creative inspiration partner.
+	person partner;
     bool partner_timeshare;//How long the person prefers to partner with investor/creative inspiration.
 	bool content_w_neighbors <- true update: tolerance/100 > (similar_here / (total_here+1)) ;
 	float income_start <- gauss(mean_income_start,stdev_income_start);//income assigned at model start - can be used to see how much money made since the beginning of the model
@@ -160,6 +182,8 @@ species person skills: [moving]{
 	float income <- income_start;
 	//income of agent, based on gamma or bimodal distribution
 	float tolerance <- mean_tolerance;
+	
+	
 	patches my_place;
 	init {
         //The agent will be located on one of the free places
@@ -180,11 +204,30 @@ species person skills: [moving]{
             	}
   			}
  		}
+ 		
  	}
  	if(!content_w_neighbors){
 			do migrate;
 		}
-}
+	if(my_place.creative_space and creative){
+		ask person at_distance(neighbours_distance){
+			if(myself.partnered =false){
+				if flip((rate_of_partnership*tolerance)/100){
+					self.partner <- myself;
+					if(flip(0.5)){
+						my_place.entrepreneurship <- my_place.entrepreneurship + 1;
+						}
+					else{
+						myself.creative <- true;
+					}
+					}
+					
+				}				
+			}
+		}
+		
+	}
+
 		
 
 
@@ -197,6 +240,7 @@ species person skills: [moving]{
 		self.location <- point(one_of(residentialspaces).location);
 	}
 	
+	
 }
 
 
@@ -207,7 +251,7 @@ grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents
     int occupancy_start;//occupancy of patch at the beginning of the simulation
     bool creative_space <- false;//whether or not patch is creative space
     bool high_creative_space <- false;
-
+	int entrepreneurship <- 0;
     int num_content_cr;//number of content creative residents of patch
     int pop_count_cr_n;//new pop count used to decline in number of creatives visit
     int pop_count_cr_diff;//diff of count of creative pop to current count of creative pop if negative then gained value, otherwise decrease
@@ -232,7 +276,7 @@ grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents
 //        
 //        }
     //creative value of patch
-    int creative_value <- 0 update: pop_count_cr*5 + green_spaces_nearby*25 + high_creative_space_nearby*25;
+    int creative_value <- 0 update: pop_count_cr*5 + green_spaces_nearby*25 + high_creative_space_nearby*25 + entrepreneurship*25;
     reflex update{
     	ask self{
     	if(creative_value >=50){
@@ -247,18 +291,23 @@ grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents
     	
      }
   }
+  	int color_value <- rnd_choice([percent_water/100
+  		,percent_commercial/100
+  		,percent_green_space/100
+  		,percent_residential/100
+  		,percent_undeveloped/100]);
     //sets color based on landuse value
     action update_color {
-        if (landuse = "water") {
+        if (color_value = 0) {
             color <- water_color;
         }
-        else if (landuse = "commercial") {
+        else if (color_value = 1) {
             color <- commercial_color;
         }
-        else if (landuse = "green space") {
+        else if (color_value = 2) {
             color <- greenspace_color;
         }
-         else if (landuse = "residential"){
+         else if (color_value = 3){
          	color <- residential_color;
            }        
 	        else{
@@ -278,6 +327,21 @@ experiment MyExperiment type: gui {
         display MyDisplay type: java2D {
             grid patches lines:#black;
             species person;
+        }
+        display chart_display{
+            chart "Creative and Non-Creative Population over time" type: pie background: #lightgray axes: #white position: { 0, 0 } size: { 1.0, 0.5 } {
+                data "Creative Population" value: cr_population color: #purple style: spline;
+                data "Non-Creative Population" value: population-cr_population color: #red style: spline;
+                data "Total Population" value: population color: #black style: spline;
+            }
+
+            chart "Percent Creative Space" type: series background: #lightgray axes: #white position: { 0, 0.5 } size: { 1.0, 0.5 }  x_range: 50{
+                data "Percent Creative Space" color: rgb(85,26,139) value: (num_creative_spaces / num_patches) * 100 style: spline;
+                data "Percent High Creative Space" color: #purple value: (num_high_creative_spaces / num_patches) * 100 style: spline;
+            }
+        	chart "Creative and Non-Creative Population over time" type: series{
+        		
+        	}
         }
     }
 }

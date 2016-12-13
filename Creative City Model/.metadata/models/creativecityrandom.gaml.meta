@@ -1,0 +1,10 @@
+#
+#Tue Dec 13 15:52:28 EST 2016
+operators=envelope~-~as~/~sum~collect~.~length~median~count~<\=~*~>~rnd~neighbors_at~and~\=~+~>\=~gauss~one_of~<~flip~\!~at_distance~circle~rnd_choice~at~point~rgb
+plugins=msi.gama.core~ummisco.gama.java2d
+statements=action~set~init~reflex~if~do~ask~else~aspect~draw~add~create~write~output~display~display_grid~display_population~chart~data
+attributes=x~y
+skills=reflex~moving~grid
+constants=white~black~lightgray~purple~red
+types=geometry~string~list~int~unknown~point~agent~rgb~float~bool~date~container
+actions=debug~error~tell~write~die~_init_~_step_~halt~pause~follow~goto~move~wander
