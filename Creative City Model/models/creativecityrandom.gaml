@@ -16,6 +16,7 @@ global {
 	list<person> all_people;
 	//initialization of list of creative people in city
 	list<person> cr_people;
+	list<person> non_cr_people;
 	
 //PARAMETERIZED INITIALIZATIONS
 	//colors
@@ -45,13 +46,12 @@ global {
   float stdev_income_start<-100.0 parameter: "STDEV of starting Income" category: "Resident Specifications";
   float percent_educated<-50.0 parameter: "Percent Educated" category: "Resident Specifications";//% of population with college education;
   float percent_educated_cr<-50.0 parameter: "Percent Creative of Educated" category: "Resident Specifications";//% of creative population with college education
-  float indexofgini;
   float cr_space_percent;
   //percentage of people that die/are born every month
-  float pop_growth_rate<-10.0 parameter: "Population Growth Rate" category: "Resident Specifications";
+  float pop_growth_rate<-12.0 parameter: "Population Growth Rate" category: "Resident Specifications";
   //percentage of creative people that die/are born every month
   float brain_drain<-0.0 parameter: "Brain Drain" category: "Resident Specifications";
-  int init_pop <- 250  parameter: "Initial Population" category: "Resident Specifications";
+  int init_pop <- 100 parameter: "Initial Population" category: "Resident Specifications";
   int dimensions <- 25  parameter: "Grid Dimensions" category: "Resident Specifications";
   //average tolerance of members of city, (for now, average tolerance = tolerance of all members of city)
   int mean_tolerance <-60 parameter: "Mean Tolerance" category: "Resident Specifications";
@@ -61,10 +61,15 @@ global {
   float neighborhood_size <- 0.0 parameter: "Neighborhood Size: " category: "Resident Specifications";
   
   int percent_water <- 20 parameter: "Landuse Percentage Water" category: "City Specifications";
-  int percent_green_space <- 20 parameter: "Landuse Percentage Green Space" category: "City Specifications";
-  int percent_commercial <- 20 parameter: "Landuse Percentage Commercial" category: "City Specifications";
+  int percent_green_space <- 10 parameter: "Landuse Percentage Green Space" category: "City Specifications";
+  int percent_commercial <- 50 parameter: "Landuse Percentage Commercial" category: "City Specifications";
   int percent_residential <- 20 parameter: "Landuse Percentage Residential" category: "City Specifications";
-  int percent_undeveloped <- 20 parameter: "Landuse Percentage Undeveloped" category: "City Specifications";
+  int percent_undeveloped <- 10 parameter: "Landuse Percentage Undeveloped" category: "City Specifications";
+  float TotalWealth;
+  float WealthSumSoFar;
+  float GiniCoefficient;
+  float incomei;
+  float incomej;
   string landuse;
   string income_dist;
   
@@ -86,7 +91,7 @@ global {
       	}
       	if(flip((percent_educated/100)*(percent_educated_cr/100))){
       		creative <- true;
-      		income_start <- income_start*1.03;
+      		
 
       	}
       	color <- colors at (rnd(number_of_groups-1));
@@ -97,26 +102,16 @@ global {
       if (creative = true){
       	add person(self) to: cr_people;
       }
+      if (creative = false){
+      	add person(self) to: non_cr_people;
+      }
     }
     write cr_people;
       all_people <- person as list ;
 	//create more people if population growth rate is positive
 
   }
-  reflex addpeople{
-    	population <- all_people count(true);
-    	create person number:population*(pop_growth_rate/100){
-      	if(flip(percent_educated/100)){
-      		educated <- true;	
-      	}
-      	if(flip((percent_educated/100)*(percent_educated_cr/100))){
-      		creative <- true;
-      		income_start <- income_start*1.03;
 
-      	}
-      	color <- colors at (rnd(number_of_groups-1));
-      }
-    }
  reflex countcreative{
  	ask patches{
  	if(creative_space){
@@ -124,17 +119,72 @@ global {
  		}
  	if(high_creative_space){
  		add patches(self) to: high_creative_spaces;
- 		} 	
+ 		}	
  	}
- }
+ 	}
+ //reflex for monthly creation of "person" species
+ reflex createpeople{ 
+ 		//count number of people in list of all_people
+ 		all_people <- person as list ;
+ 	    population <- all_people count(true);
+    	create person number:population*(pop_growth_rate/12/100){
+      	if(flip(percent_educated/100)){
+      		educated <- true;	
+      	
+      	if(flip((percent_educated_cr/100))){
+      		creative <- true;
+      		income_start <- income_start*1.03;
 
+    	}
+    	}
+      	color <- colors at (rnd(number_of_groups-1));
+      }
+    	//writes population
+    	//should i
+    	write(population);
+ }
+ reflex CalculateGini{
+//	all_people <- all_people sort_by (each.income);
+//	TotalWealth <- sum(all_people collect each.income);
+//	WealthSumSoFar <- 0.0;
+//	GiniIndexReserve<- 0.0;
+//       loop i from: 0 to: length(all_people)-1{
+//    	ask all_people at i {
+//       WealthSumSoFar <- WealthSumSoFar + income;
+//       percentwealthsofar <- (WealthSumSoFar/TotalWealth)*100;
+//       percentpopsofar <- (i/length(all_people))*100;
+//       GiniIndexReserve <- GiniIndexReserve + (i/length(all_people)) - (WealthSumSoFar/TotalWealth);
+//        write GiniIndexReserve;
+//     }
+//	write GiniIndexReserve;
+//	} 
+	incomei <- 0.0;
+	incomej <- 0.0;
+	 loop i from: 0 to: length(all_people)-1{
+	     	ask all_people at i {
+	     			incomei <- income;
+	     			loop j from: 0 to: length(all_people)-1{
+	     			ask all_people at j {
+	     				incomej<- income;
+	     				GiniCoefficient <- GiniCoefficient+abs(incomei - incomej);
+	     			}
+	     		}
+	     	}
+	
+ }
+ 	GiniCoefficient<-GiniCoefficient/(2*length(all_people)*sum(all_people collect each.income));
+ 	write GiniCoefficient;
+ }
+ 
   //other calculated variables
   float mean_income_all<- 0.0 update: sum(all_people collect each.income)/length(all_people);
   float median_income_all<-0.0 update: median(all_people collect each.income);
   float percent_poor<- 0.0 update: all_people count (each.income <= median_income_all*0.75)/length(all_people);
   float percent_middle <- 0.0 update: all_people count (each.income > median_income_all*0.75)/length(all_people);
   float percent_rich <- 0.0 update:  all_people count (each.income > median_income_all*4)/length(all_people);
-  float mean_income_cr <- 0.0 update: sum(cr_people collect each.income)/length(cr_people);
+  //REMEMBER TO CORRECT THIS
+  float mean_income_cr <- 0.0 update: sum(cr_people collect each.income)/(length(cr_people));
+  float mean_income_non_cr <- 0.0 update: sum(non_cr_people collect each.income)/(length(cr_people));
   int cr_population<- length(cr_people) update: length(cr_people);
   int population <- length(all_people) update: length(all_people);
   int num_creative_spaces <- length(creative_spaces)update: length(creative_spaces);
@@ -147,8 +197,6 @@ global {
 species person skills: [moving]{
 	rgb color;
 	//list of people 
-	list<person> my_neighbours <- self neighbors_at neighbours_distance;
-	list<person> my_direct_neighbours <- self neighbors_at neighbours_distance;
 	int similar_here -> {
 		all_people count ((each.color =color) 
 			and location.x <= each.location.x + neighborhood_size 
@@ -182,8 +230,10 @@ species person skills: [moving]{
 	float income <- income_start;
 	//income of agent, based on gamma or bimodal distribution
 	float tolerance <- mean_tolerance;
-	
-	
+	float percentwealthsofar <- 0.0;
+	float GiniIndex <- 0.0;
+	float GiniIndexReserve <- 0.0;
+	float percentpopsofar <- 0.0;
 	patches my_place;
 	init {
         //The agent will be located on one of the free places
@@ -206,6 +256,9 @@ species person skills: [moving]{
  		}
  		
  	}
+ 	if(creative){
+ 		income_start <- income_start*1.5;
+ 	}
  	if(!content_w_neighbors){
 			do migrate;
 		}
@@ -225,11 +278,10 @@ species person skills: [moving]{
 				}				
 			}
 		}
-		
+
 	}
 
 		
-
 
 	//set people as circles of their defined color
     aspect default {
@@ -261,7 +313,7 @@ grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents
     //population of grid path
     int patch_population<- 0 update: all_people count (each.location = location);    
 	int pop_count_cr <- 0 update: all_people count (each.location = location and each.creative = true);
-	list<patches> my_neighbours <- self neighbors_at neighbours_distance;
+	list<patches> my_neighbours <- patches at_distance neighbours_distance;
 	int green_spaces_nearby <- 0 update: my_neighbours count (each.landuse = "green space");
 	int high_creative_space_nearby <- 0 update: my_neighbours count (each.high_creative_space = true);
 //	reflex update{
@@ -300,18 +352,23 @@ grid patches width: dimensions height: dimensions neighbors:8 use_regular_agents
     action update_color {
         if (color_value = 0) {
             color <- water_color;
+            landuse <- "water";
         }
         else if (color_value = 1) {
             color <- commercial_color;
+            landuse <- "residential";
         }
         else if (color_value = 2) {
             color <- greenspace_color;
+            landuse <- "green space";
         }
          else if (color_value = 3){
          	color <- residential_color;
+         	landuse <- "residential";
            }        
 	        else{
             color <- undeveloped_color;
+            landuse <- "undeveloped";
         }
     }
     //ASSIGN creative VALUE FOR HIGH CREATIVE AREAS
@@ -329,19 +386,29 @@ experiment MyExperiment type: gui {
             species person;
         }
         display chart_display{
-            chart "Creative and Non-Creative Population over time" type: pie background: #lightgray axes: #white position: { 0, 0 } size: { 1.0, 0.5 } {
+            chart "Creative and Non-Creative Population over time" type: series background: #lightgray axes: #white position: { 0, 0 } size: { 0.5, 0.5 }{
                 data "Creative Population" value: cr_population color: #purple style: spline;
                 data "Non-Creative Population" value: population-cr_population color: #red style: spline;
                 data "Total Population" value: population color: #black style: spline;
             }
 
-            chart "Percent Creative Space" type: series background: #lightgray axes: #white position: { 0, 0.5 } size: { 1.0, 0.5 }  x_range: 50{
+            chart "Percent Creative Space" type: series background: #lightgray axes: #white position: { 0, 0.5 } size: { 0.5, 0.5 } {
                 data "Percent Creative Space" color: rgb(85,26,139) value: (num_creative_spaces / num_patches) * 100 style: spline;
                 data "Percent High Creative Space" color: #purple value: (num_high_creative_spaces / num_patches) * 100 style: spline;
             }
-        	chart "Creative and Non-Creative Population over time" type: series{
-        		
-        	}
+            chart "Gini Coeffecient" type:series background: #lightgray axes: #white  position: {0.5, 0} size: {0.5,0.5}			
+			{
+				data "Gini Coefficient" value: GiniCoefficient color: #black style: line;
+			//	data "lorenz" value: [all_people collect each.percentpopsofar,all_people collect each.percentwealthsofar]
+			//	style: spline;
+			}
+			chart "Income Structure" type:series background: #lightgray axes: #white  position: {0.5, 0.5} size: {0.5,0.5}			
+			{
+                data "Creative Population" value: mean_income_cr color: #purple style: spline;
+                data "Non-Creative Population" value: mean_income_non_cr color: #red style: spline;
+                data "Total Population" value: mean_income_all color: #black style: spline;
+			}
+
         }
     }
 }
